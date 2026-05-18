@@ -215,19 +215,40 @@ body {
   max-height: 72vh;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 18px;
+  gap: 10px;
+  padding: 14px 18px 18px;
   background: white;
   border: 1px solid var(--border-color);
   border-radius: 14px;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.08);
   z-index: 60;
-  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
-              box-shadow 0.25s ease;
+  user-select: none;
 }
 .floating-toc:hover {
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.12);
 }
+.toc-drag-handle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 14px;
+  margin: -4px -8px 2px;
+  cursor: grab;
+  border-radius: 6px;
+  transition: background-color 0.15s;
+}
+.toc-drag-handle:hover { background: #f4f6fa; }
+.toc-drag-handle:active { cursor: grabbing; }
+.toc-drag-handle span {
+  width: 24px;
+  height: 2px;
+  border-radius: 2px;
+  background: #d4d8e0;
+}
+.toc-drag-handle span:nth-child(2),
+.toc-drag-handle span:nth-child(3) { display: none; }
 .toc-nav {
   display: flex;
   align-items: center;
@@ -294,10 +315,25 @@ body {
   color: var(--accent);
 }
 
-@media (max-width: 1180px) {
+/* Reserve right-side space for the floating TOC so it never overlaps
+   the main content. Achieved by shifting the centered web container /
+   controls slightly to the left. */
+@media (min-width: 1180px) {
+  .web-container,
+  .controls {
+    margin-right: 268px;
+  }
+}
+
+@media (max-width: 1179px) {
   .floating-toc {
     display: none;
   }
+}
+
+/* Offset scroll target so the heading isn't pinned to the viewport top */
+.markdown-content h3 {
+  scroll-margin-top: 48px;
 }
 
 .markdown-content {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -377,8 +377,46 @@ function App() {
   const scrollToQuestion = (id) => {
     const el = document.getElementById(id);
     if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Leave a small gap above the heading (about one line) instead of
+      // pinning it to the very top of the viewport.
+      const offset = 48;
+      const top = window.scrollY + el.getBoundingClientRect().top - offset;
+      window.scrollTo({ top, behavior: 'smooth' });
     }
+  };
+
+  // Draggable position offset for the floating TOC.
+  const [tocOffset, setTocOffset] = useState({ x: 0, y: 0 });
+  const dragStartRef = useRef(null);
+
+  const startTocDrag = (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    dragStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initX: tocOffset.x,
+      initY: tocOffset.y,
+    };
+    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+    const onMove = (ev) => {
+      const dx = ev.clientX - dragStartRef.current.startX;
+      const dy = ev.clientY - dragStartRef.current.startY;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      setTocOffset({
+        // Negative x moves right (we'll subtract from `right`), so allow
+        // a wide range but keep the TOC at least partially on screen.
+        x: clamp(dragStartRef.current.initX + dx, -(vw - 320), 60),
+        y: clamp(dragStartRef.current.initY + dy, -(vh / 2 - 80), vh / 2 - 80),
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
   };
 
   // Calculate layout for print mode (we concatenate all filtered notes for print, or print them one by one)
@@ -542,7 +580,22 @@ function App() {
       )}
 
       {!isPrintMode && currentNote && (
-        <aside className="floating-toc" aria-label="목차">
+        <aside
+          className="floating-toc"
+          aria-label="목차"
+          style={{
+            right: `${28 - tocOffset.x}px`,
+            transform: `translateY(calc(-50% + ${tocOffset.y}px))`,
+          }}
+        >
+          <div
+            className="toc-drag-handle"
+            onMouseDown={startTocDrag}
+            title="드래그해서 위치 이동"
+            aria-label="드래그 핸들"
+          >
+            <span /><span /><span />
+          </div>
           <div className="toc-nav">
             <button
               type="button"
