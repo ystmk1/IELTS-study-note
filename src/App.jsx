@@ -380,9 +380,8 @@ function App() {
   );
   const currentNote = filteredNotes[safeIndex];
 
-  // ←/→ to switch between notes in web mode.
+  // ←/→ to switch between notes (both web and A4 view).
   useEffect(() => {
-    if (isPrintMode) return;
     const handler = (e) => {
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
@@ -396,13 +395,12 @@ function App() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isPrintMode, filteredNotes.length]);
+  }, [filteredNotes.length]);
 
   // Reset scroll position when switching notes.
   useEffect(() => {
-    if (isPrintMode) return;
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [safeIndex, isPrintMode]);
+  }, [safeIndex]);
 
   const scrollToQuestion = (id) => {
     const el = document.getElementById(id);
@@ -449,17 +447,16 @@ function App() {
     window.addEventListener('mouseup', onUp);
   };
 
-  // Calculate layout for print mode (we concatenate all filtered notes for print, or print them one by one)
+  // Calculate layout for print mode — only the currently selected note.
   useEffect(() => {
-    if (!isPrintMode) {
+    if (!isPrintMode || !currentNote) {
       setLoading(false);
+      setPages([]);
       return;
     }
     // Wait for the custom font to load before calculating layout
     document.fonts.ready.then(() => {
-      // Combine filtered notes for printing (no dividers — h3 page breaks separate them)
-      const combinedText = filteredNotes.map(note => note.body).join('\n\n');
-      const preprocessed = preprocessMarkdown(combinedText, { addDividers: false });
+      const preprocessed = preprocessMarkdown(currentNote.body, { addDividers: false });
       const tokens = marked.lexer(preprocessed);
       
       const newPages = [];
@@ -496,7 +493,7 @@ function App() {
       setPages(newPages);
       setLoading(false);
     });
-  }, [filteredNotes, isPrintMode]);
+  }, [currentNote, isPrintMode]);
 
   if (loading) {
     return <div className="loading">노트 레이아웃 계산 중...</div>;
@@ -534,35 +531,33 @@ function App() {
           </div>
         </div>
         
-        {!isPrintMode && (
-          <div className="filters">
-            <div className="search-bar">
-              <input 
-                type="text" 
-                placeholder="노트 검색..." 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-            <div className="tag-list">
-              <button 
-                className={`tag-btn ${selectedTag === null ? 'active' : ''}`}
-                onClick={() => setSelectedTag(null)}
-              >
-                #전체
-              </button>
-              {allTags.map(tag => (
-                <button
-                  key={tag}
-                  className={`tag-btn ${selectedTag === tag ? 'active' : ''}`}
-                  onClick={() => setSelectedTag(tag)}
-                >
-                  #{formatTagLabel(tag)}
-                </button>
-              ))}
-            </div>
+        <div className="filters">
+          <div className="search-bar">
+            <input
+              type="text"
+              placeholder="노트 검색..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
           </div>
-        )}
+          <div className="tag-list">
+            <button
+              className={`tag-btn ${selectedTag === null ? 'active' : ''}`}
+              onClick={() => setSelectedTag(null)}
+            >
+              #전체
+            </button>
+            {allTags.map(tag => (
+              <button
+                key={tag}
+                className={`tag-btn ${selectedTag === tag ? 'active' : ''}`}
+                onClick={() => setSelectedTag(tag)}
+              >
+                #{formatTagLabel(tag)}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {!isPrintMode ? (
@@ -588,7 +583,7 @@ function App() {
             <div className="no-results">검색 결과가 없습니다.</div>
           )}
         </div>
-      ) : (
+      ) : currentNote ? (
         <div className="pages-container">
           {pages.map((pageTokens, index) => {
             const pageMarkdown = pageTokens.map(t => t.raw).join('');
@@ -608,9 +603,11 @@ function App() {
             );
           })}
         </div>
+      ) : (
+        <div className="no-results">검색 결과가 없습니다.</div>
       )}
 
-      {!isPrintMode && currentNote && (
+      {currentNote && (
         <aside
           className="floating-toc"
           aria-label="목차"
