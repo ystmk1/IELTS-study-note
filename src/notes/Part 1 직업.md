@@ -31,7 +31,7 @@ I'm a student. More specifically, I'm a university student majoring in industria
 
 I chose industrial design because I was interested in creating things, and the field that really needs innovative and practical solutions.
 
-I was drawn to industrial design because of my innate creativity and passion for bringing ideas to life. I believe this field requires both aesthetic sense and logical thinking, which aligns well with my strengths.
+I believe this field requires both aesthetic sense and logical thinking, which aligns well with my strengths.
 
 I chose industrial design because I like ~~create some funny things~~ ==creating innovative things==, and it is ~~the~~ ==a== field that ~~really needs~~ ==requires both== innovative and practical solutions. I believe this field ~~requires both aesthetic sense~~ ==demands a balance of aesthetics== and logical thinking, which ~~is fit to me~~ ==suits me perfectly==.
 
