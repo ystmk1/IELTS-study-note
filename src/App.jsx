@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -139,19 +139,30 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   
   // Gather all unique tags
-  const allTags = [...new Set(allNotes.flatMap(note => note.tags))];
-  
-  // Filter notes
+  const allTags = useMemo(
+    () => [...new Set(allNotes.flatMap(note => note.tags))],
+    []
+  );
+
+  // Filter notes — memoize so the reference is stable across renders
+  // when inputs don't change (otherwise the layout effect below would
+  // re-run on every render and lock the UI in a render loop).
   const filteredNotes = useMemo(() => {
     return allNotes.filter(note => {
       const matchesTag = selectedTag ? note.tags.includes(selectedTag) : true;
-      const matchesSearch = searchQuery ? note.rawText.toLowerCase().includes(searchQuery.toLowerCase()) : true;
+      const matchesSearch = searchQuery
+        ? note.rawText.toLowerCase().includes(searchQuery.toLowerCase())
+        : true;
       return matchesTag && matchesSearch;
     });
   }, [selectedTag, searchQuery]);
 
   // Calculate layout for print mode (we concatenate all filtered notes for print, or print them one by one)
   useEffect(() => {
+    if (!isPrintMode) {
+      setLoading(false);
+      return;
+    }
     // Wait for the custom font to load before calculating layout
     document.fonts.ready.then(() => {
       // Combine filtered notes for printing
@@ -193,7 +204,7 @@ function App() {
       setPages(newPages);
       setLoading(false);
     });
-  }, [filteredNotes]);
+  }, [filteredNotes, isPrintMode]);
 
   if (loading) {
     return <div className="loading">노트 레이아웃 계산 중...</div>;
