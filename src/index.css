@@ -315,16 +315,6 @@ body {
   color: var(--accent);
 }
 
-/* Reserve right-side space for the floating TOC so it never overlaps
-   the main content. Achieved by shifting the centered web container /
-   controls slightly to the left. */
-@media (min-width: 1180px) {
-  .web-container,
-  .controls {
-    margin-right: 268px;
-  }
-}
-
 @media (max-width: 1179px) {
   .floating-toc {
     display: none;
