@@ -339,11 +339,18 @@ body {
   color: var(--text-primary);
 }
 
-.markdown-content hr, .page hr {
-  margin: 48px 0;
+/* Divider between questions — web view only. */
+.markdown-content hr {
+  margin: 64px 0 56px;
   border: none;
-  border-top: 2px dashed var(--border-color);
+  border-top: 2px dashed #c9ced8;
 }
+/* Bigger breathing room before each new question (after the first) */
+.markdown-content > h3 ~ h3 {
+  margin-top: 56px;
+}
+/* Never show inline dividers in the A4 print view or the actual print */
+.page hr { display: none !important; }
 
 .markdown-content h2, .page h2 {
   font-size: 24px;
@@ -681,7 +688,7 @@ body {
   .web-container {
     padding: 20px;
   }
-  .markdown-content hr, .page hr {
-    margin: 32px 0;
+  .markdown-content hr {
+    margin: 40px 0 32px;
   }
 }
