@@ -4,26 +4,74 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { marked } from 'marked';
 import { prepare, layout } from '@chenglou/pretext';
-import { Printer } from 'lucide-react';
+import { Printer, ChevronLeft, ChevronRight } from 'lucide-react';
 
-import dummyText from './notes/Part 1 직업.md?raw';
+function slugify(str) {
+  return String(str)
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9가-힣\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+// Split a note's raw markdown into the leading "#tag #tag" line (if present)
+// and the rest of the body.
+function splitTagsAndBody(rawText) {
+  const lines = rawText.split('\n');
+  let i = 0;
+  while (i < lines.length && lines[i].trim() === '') i++;
+  if (i < lines.length && /^(#[^\s#]+)(\s+#[^\s#]+)*\s*$/.test(lines[i].trim())) {
+    return {
+      tagLine: lines[i].trim(),
+      body: lines.slice(i + 1).join('\n').replace(/^\n+/, ''),
+    };
+  }
+  return { tagLine: '', body: rawText };
+}
+
+function extractQuestions(body) {
+  const seen = new Map();
+  const result = [];
+  const re = /^###\s+(.+?)\s*$/gm;
+  let m;
+  while ((m = re.exec(body)) !== null) {
+    const text = m[1].trim();
+    const base = slugify(text) || 'q';
+    const count = seen.get(base) || 0;
+    seen.set(base, count + 1);
+    const id = count === 0 ? base : `${base}-${count}`;
+    result.push({ text, id });
+  }
+  return result;
+}
 
 // Load all markdown files from the notes directory
 const noteModules = import.meta.glob('./notes/*.md', { query: '?raw', eager: true });
 const allNotes = Object.entries(noteModules).map(([path, content]) => {
   const rawText = content.default || content;
-  // Extract tags from the first line or anywhere: #tag
   const tagMatches = rawText.match(/#[^\s#]+/g) || [];
   const tags = [...new Set(tagMatches)];
-  
-  // Extract title from filename
+  const { tagLine, body } = splitTagsAndBody(rawText);
   const filename = path.split('/').pop().replace('.md', '');
-  
+  // Title for the floating TOC: 3rd tag if available, otherwise filename
+  const tagOnlyList = tagLine
+    ? tagLine.split(/\s+/).filter(Boolean)
+    : tags;
+  const title = (tagOnlyList[2] || filename).replace(/^#/, '');
+  const questions = extractQuestions(body);
+
   return {
     id: path,
-    title: filename,
+    title,
+    filename,
     rawText,
-    tags
+    body,
+    tagLine,
+    tags,
+    tagList: tagOnlyList,
+    questions,
   };
 });
 
@@ -47,7 +95,82 @@ function stripMarkdown(text) {
     .replace(/~~(.*?)~~/g, '$1') // strikethrough
     .replace(/==(.*?)==/g, '$1') // highlight
     .replace(/`(.*?)`/g, '$1') // code
-    .replace(/<mark>(.*?)<\/mark>/g, '$1'); // html mark
+    .replace(/<mark[^>]*>(.*?)<\/mark>/g, '$1'); // html mark
+}
+
+// Pull "수정한 거 설명" blocks out of the markdown. Each list item under
+// the block (`- **key**: value`) becomes a key→explanation entry; the
+// block itself is stripped from the rendered markdown so it only surfaces
+// through highlight tooltips.
+function extractExplanations(md) {
+  const map = {};
+  const lines = md.split('\n');
+  const result = [];
+  let inBlock = false;
+  let currentKey = null;
+  let currentValueLines = [];
+
+  const flushCurrentItem = () => {
+    if (currentKey !== null) {
+      map[currentKey] = currentValueLines.join('\n').trim();
+      currentKey = null;
+      currentValueLines = [];
+    }
+  };
+
+  const isBlockHeader = (line) =>
+    /^\s*(?:\*\*\s*수정한\s*거?\s*설명\s*\*\*|#{1,6}\s+수정한\s*거?\s*설명)\s*$/.test(line);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (isBlockHeader(line)) {
+      flushCurrentItem();
+      inBlock = true;
+      continue;
+    }
+
+    if (inBlock) {
+      const itemMatch = /^\s*[-*]\s+\*\*(.+?)\*\*\s*[:：]\s*(.*)$/.exec(line);
+      if (itemMatch) {
+        flushCurrentItem();
+        currentKey = itemMatch[1].trim();
+        currentValueLines = [itemMatch[2]];
+        continue;
+      }
+
+      // End of block: a new heading, an hr, or another **bold heading** line
+      if (
+        /^#{1,6}\s/.test(line) ||
+        /^---+\s*$/.test(line) ||
+        /^\s*\*\*[^*]+\*\*\s*$/.test(line)
+      ) {
+        flushCurrentItem();
+        inBlock = false;
+        result.push(line);
+        continue;
+      }
+
+      if (currentKey !== null) {
+        currentValueLines.push(line);
+      }
+      continue;
+    }
+
+    result.push(line);
+  }
+
+  flushCurrentItem();
+  return { explanations: map, cleanedMd: result.join('\n') };
+}
+
+function htmlAttrEscape(s) {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '&#10;');
 }
 
 // Measure block height using pretext
@@ -120,24 +243,83 @@ function measureBlock(token) {
   return height;
 }
 
-const preprocessMarkdown = (md) => {
-  let processed = md.replace(/==(.*?)==/g, '<mark>$1</mark>');
-  // Add hr between questions (###)
-  const parts = processed.split(/^(?=### )/gm);
-  if (parts.length > 1) {
-    processed = parts[0] + parts.slice(1).join('\n\n---\n\n');
+const preprocessMarkdown = (md, { addDividers = true } = {}) => {
+  const { explanations, cleanedMd } = extractExplanations(md);
+  let processed = cleanedMd.replace(/==(.+?)==/g, (_m, text) => {
+    const stripped = text.replace(/\*\*(.*?)\*\*/g, '$1').trim();
+    const explanation = explanations[stripped] || explanations[text.trim()];
+    if (explanation) {
+      return `<mark data-explanation="${htmlAttrEscape(explanation)}">${text}</mark>`;
+    }
+    return `<mark>${text}</mark>`;
+  });
+  if (addDividers) {
+    const parts = processed.split(/^(?=### )/gm);
+    if (parts.length > 1) {
+      processed = parts[0] + parts.slice(1).join('\n\n---\n\n');
+    }
   }
   return processed;
 };
+
+function flattenChildrenText(children) {
+  if (children == null) return '';
+  if (typeof children === 'string' || typeof children === 'number') return String(children);
+  if (Array.isArray(children)) return children.map(flattenChildrenText).join('');
+  if (children.props && children.props.children) return flattenChildrenText(children.props.children);
+  return '';
+}
+
+function H3WithAnchor({ children, ...props }) {
+  const text = flattenChildrenText(children).trim();
+  const id = slugify(text) || 'q';
+  return <h3 id={id} data-question-text={text} {...props}>{children}</h3>;
+}
+
+function HighlightMark({ children, ...props }) {
+  const explanation = props['data-explanation'];
+  const [open, setOpen] = useState(false);
+
+  if (!explanation) {
+    return <mark>{children}</mark>;
+  }
+
+  return (
+    <span className="highlight-wrap">
+      <mark
+        className="highlight-clickable"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+        title="클릭해서 수정 설명 보기"
+      >
+        {children}
+      </mark>
+      {open && (
+        <span
+          className="explanation-popup"
+          role="tooltip"
+          onClick={() => setOpen(false)}
+        >
+          {explanation}
+        </span>
+      )}
+    </span>
+  );
+}
+
+const markdownComponents = { mark: HighlightMark, h3: H3WithAnchor };
 
 function App() {
   const [pages, setPages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isPrintMode, setIsPrintMode] = useState(false);
-  
+
   const [selectedTag, setSelectedTag] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  
+  const [currentNoteIndex, setCurrentNoteIndex] = useState(0);
+
   // Gather all unique tags
   const allTags = useMemo(
     () => [...new Set(allNotes.flatMap(note => note.tags))],
@@ -157,6 +339,48 @@ function App() {
     });
   }, [selectedTag, searchQuery]);
 
+  // Reset the note index whenever the filtered set changes.
+  useEffect(() => {
+    setCurrentNoteIndex(0);
+  }, [filteredNotes]);
+
+  const safeIndex = Math.min(
+    currentNoteIndex,
+    Math.max(0, filteredNotes.length - 1)
+  );
+  const currentNote = filteredNotes[safeIndex];
+
+  // ←/→ to switch between notes in web mode.
+  useEffect(() => {
+    if (isPrintMode) return;
+    const handler = (e) => {
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (e.key === 'ArrowRight') {
+        setCurrentNoteIndex((i) =>
+          Math.min(i + 1, Math.max(0, filteredNotes.length - 1))
+        );
+      } else if (e.key === 'ArrowLeft') {
+        setCurrentNoteIndex((i) => Math.max(i - 1, 0));
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isPrintMode, filteredNotes.length]);
+
+  // Reset scroll position when switching notes.
+  useEffect(() => {
+    if (isPrintMode) return;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [safeIndex, isPrintMode]);
+
+  const scrollToQuestion = (id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   // Calculate layout for print mode (we concatenate all filtered notes for print, or print them one by one)
   useEffect(() => {
     if (!isPrintMode) {
@@ -165,9 +389,9 @@ function App() {
     }
     // Wait for the custom font to load before calculating layout
     document.fonts.ready.then(() => {
-      // Combine filtered notes for printing
-      const combinedText = filteredNotes.map(note => note.rawText).join('\n\n---\n\n');
-      const preprocessed = preprocessMarkdown(combinedText);
+      // Combine filtered notes for printing (no dividers — h3 page breaks separate them)
+      const combinedText = filteredNotes.map(note => note.body).join('\n\n');
+      const preprocessed = preprocessMarkdown(combinedText, { addDividers: false });
       const tokens = marked.lexer(preprocessed);
       
       const newPages = [];
@@ -274,17 +498,24 @@ function App() {
 
       {!isPrintMode ? (
         <div className="web-container">
-          {filteredNotes.map(note => (
-            <div key={note.id} className="markdown-content note-block">
-              <ReactMarkdown 
+          {currentNote ? (
+            <div key={currentNote.id} className="markdown-content note-block">
+              {currentNote.tagList.length > 0 && (
+                <div className="note-tags">
+                  {currentNote.tagList.map((t) => (
+                    <span key={t} className="note-tag">{t}</span>
+                  ))}
+                </div>
+              )}
+              <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeRaw]}
+                components={markdownComponents}
               >
-                {preprocessMarkdown(note.rawText)}
+                {preprocessMarkdown(currentNote.body)}
               </ReactMarkdown>
             </div>
-          ))}
-          {filteredNotes.length === 0 && (
+          ) : (
             <div className="no-results">검색 결과가 없습니다.</div>
           )}
         </div>
@@ -295,9 +526,10 @@ function App() {
             return (
               <div className="page" key={index}>
                 <div className="page-content">
-                  <ReactMarkdown 
+                  <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     rehypePlugins={[rehypeRaw]}
+                    components={markdownComponents}
                   >
                     {pageMarkdown}
                   </ReactMarkdown>
@@ -307,6 +539,56 @@ function App() {
             );
           })}
         </div>
+      )}
+
+      {!isPrintMode && currentNote && (
+        <aside className="floating-toc" aria-label="목차">
+          <div className="toc-nav">
+            <button
+              type="button"
+              className="toc-nav-btn"
+              onClick={() => setCurrentNoteIndex((i) => Math.max(i - 1, 0))}
+              disabled={safeIndex <= 0}
+              aria-label="이전 노트"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="toc-counter">
+              {safeIndex + 1} / {filteredNotes.length}
+            </span>
+            <button
+              type="button"
+              className="toc-nav-btn"
+              onClick={() =>
+                setCurrentNoteIndex((i) =>
+                  Math.min(i + 1, filteredNotes.length - 1)
+                )
+              }
+              disabled={safeIndex >= filteredNotes.length - 1}
+              aria-label="다음 노트"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+          <h3 className="toc-title">{currentNote.title}</h3>
+          {currentNote.questions.length > 0 && (
+            <ul className="toc-list">
+              {currentNote.questions.map((q) => (
+                <li key={q.id}>
+                  <a
+                    href={`#${q.id}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      scrollToQuestion(q.id);
+                    }}
+                  >
+                    {q.text}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </aside>
       )}
     </div>
   );

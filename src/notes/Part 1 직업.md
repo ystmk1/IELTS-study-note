@@ -29,8 +29,7 @@ I'm a student. More specifically, I'm a university student majoring in industria
 
 ### Why did you choose your major?
 
-I chose industrial design because I was interested in creating things, and the field that really needs innovative and practical solutions. Also, I thought it would be a good match for my aptitude for logical thinking.
-
+I chose industrial design because I was interested in creating things, and the field that really needs innovative and practical solutions.
 
 I was drawn to industrial design because of my innate creativity and passion for bringing ideas to life. I believe this field requires both aesthetic sense and logical thinking, which aligns well with my strengths.
 
