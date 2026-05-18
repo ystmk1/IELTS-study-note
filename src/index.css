@@ -475,7 +475,14 @@ body {
   white-space: normal;
   word-break: keep-all;
   z-index: 100;
-  cursor: pointer;
+}
+.explanation-popup strong { font-weight: 700; color: var(--text-primary); }
+.explanation-popup em { font-style: italic; }
+.explanation-popup code {
+  background: #f1f3f7;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
 }
 
 .page-number {

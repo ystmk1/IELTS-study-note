@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useId, useContext, createContext } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -282,9 +282,16 @@ function H3WithAnchor({ children, ...props }) {
   return <h3 id={id} data-question-text={text} {...props}>{children}</h3>;
 }
 
+const ExplanationContext = createContext({
+  openId: null,
+  setOpenId: () => {},
+});
+
 function HighlightMark({ children, ...props }) {
   const explanation = props['data-explanation'];
-  const [open, setOpen] = useState(false);
+  const myId = useId();
+  const { openId, setOpenId } = useContext(ExplanationContext);
+  const isOpen = openId === myId;
 
   if (!explanation) {
     return <mark>{children}</mark>;
@@ -296,20 +303,18 @@ function HighlightMark({ children, ...props }) {
         className="highlight-clickable"
         onClick={(e) => {
           e.stopPropagation();
-          setOpen((o) => !o);
+          setOpenId(isOpen ? null : myId);
         }}
         title="클릭해서 수정 설명 보기"
       >
         {children}
       </mark>
-      {open && (
+      {isOpen && (
         <span
           className="explanation-popup"
           role="tooltip"
-          onClick={() => setOpen(false)}
-        >
-          {explanation}
-        </span>
+          dangerouslySetInnerHTML={{ __html: marked.parseInline(explanation) }}
+        />
       )}
     </span>
   );
@@ -325,6 +330,25 @@ function App() {
   const [selectedTag, setSelectedTag] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentNoteIndex, setCurrentNoteIndex] = useState(0);
+
+  // Track which explanation popup is currently open (only one at a time).
+  const [openExplanationId, setOpenExplanationId] = useState(null);
+  const explanationCtx = useMemo(
+    () => ({ openId: openExplanationId, setOpenId: setOpenExplanationId }),
+    [openExplanationId]
+  );
+
+  // Close the popup on any click outside a highlight wrap.
+  useEffect(() => {
+    if (openExplanationId === null) return;
+    const handler = (e) => {
+      if (!e.target.closest || !e.target.closest('.highlight-wrap')) {
+        setOpenExplanationId(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [openExplanationId]);
 
   // Gather all unique tags
   const allTags = useMemo(
@@ -479,6 +503,7 @@ function App() {
   }
 
   return (
+    <ExplanationContext.Provider value={explanationCtx}>
     <div className="app-container">
       <div className="controls">
         <div className="controls-header">
@@ -650,6 +675,7 @@ function App() {
         </aside>
       )}
     </div>
+    </ExplanationContext.Provider>
   );
 }
 
