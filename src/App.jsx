@@ -6,7 +6,26 @@ import { marked } from 'marked';
 import { prepare, layout } from '@chenglou/pretext';
 import { Printer } from 'lucide-react';
 
-import dummyText from './assets/dummy.md?raw';
+import dummyText from './notes/Part 1 직업.md?raw';
+
+// Load all markdown files from the notes directory
+const noteModules = import.meta.glob('./notes/*.md', { query: '?raw', eager: true });
+const allNotes = Object.entries(noteModules).map(([path, content]) => {
+  const rawText = content.default || content;
+  // Extract tags from the first line or anywhere: #tag
+  const tagMatches = rawText.match(/#[^\s#]+/g) || [];
+  const tags = [...new Set(tagMatches)];
+  
+  // Extract title from filename
+  const filename = path.split('/').pop().replace('.md', '');
+  
+  return {
+    id: path,
+    title: filename,
+    rawText,
+    tags
+  };
+});
 
 // A4 dimensions and layout specs
 const PAGE_WIDTH = 794;
@@ -101,22 +120,41 @@ function measureBlock(token) {
   return height;
 }
 
-// Convert markdown highlighted ==text== to <mark>text</mark>
-// Since ReactMarkdown uses remark-gfm but doesn't do ==highlight==, we pre-process it
 const preprocessMarkdown = (md) => {
-  return md.replace(/==(.*?)==/g, '<mark>$1</mark>');
+  let processed = md.replace(/==(.*?)==/g, '<mark>$1</mark>');
+  // Add hr between questions (###)
+  const parts = processed.split(/^(?=### )/gm);
+  if (parts.length > 1) {
+    processed = parts[0] + parts.slice(1).join('\n\n---\n\n');
+  }
+  return processed;
 };
 
 function App() {
   const [pages, setPages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isPrintMode, setIsPrintMode] = useState(false);
+  
+  const [selectedTag, setSelectedTag] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Gather all unique tags
+  const allTags = [...new Set(allNotes.flatMap(note => note.tags))];
+  
+  // Filter notes
+  const filteredNotes = allNotes.filter(note => {
+    const matchesTag = selectedTag ? note.tags.includes(selectedTag) : true;
+    const matchesSearch = searchQuery ? note.rawText.toLowerCase().includes(searchQuery.toLowerCase()) : true;
+    return matchesTag && matchesSearch;
+  });
 
+  // Calculate layout for print mode (we concatenate all filtered notes for print, or print them one by one)
   useEffect(() => {
     // Wait for the custom font to load before calculating layout
     document.fonts.ready.then(() => {
-      const rawText = dummyText;
-      const preprocessed = preprocessMarkdown(rawText);
+      // Combine filtered notes for printing
+      const combinedText = filteredNotes.map(note => note.rawText).join('\n\n---\n\n');
+      const preprocessed = preprocessMarkdown(combinedText);
       const tokens = marked.lexer(preprocessed);
       
       const newPages = [];
@@ -153,7 +191,7 @@ function App() {
       setPages(newPages);
       setLoading(false);
     });
-  }, []);
+  }, [filteredNotes]);
 
   if (loading) {
     return <div className="loading">노트 레이아웃 계산 중...</div>;
@@ -162,48 +200,84 @@ function App() {
   return (
     <div className="app-container">
       <div className="controls">
-        <h1>IELTS Study Note</h1>
-        <div className="button-group">
-          <button 
-            className={`toggle-btn ${!isPrintMode ? 'active' : ''}`} 
-            onClick={() => setIsPrintMode(false)}
-          >
-            웹에서 보기
-          </button>
-          <button 
-            className={`toggle-btn ${isPrintMode ? 'active' : ''}`} 
-            onClick={() => setIsPrintMode(true)}
-          >
-            A4 인쇄용
-          </button>
-          <button 
-            className="print-button" 
-            onClick={() => {
-              setIsPrintMode(true);
-              setTimeout(() => window.print(), 100);
-            }}
-          >
-            <Printer size={18} />
-            인쇄 / PDF
-          </button>
+        <div className="controls-header">
+          <h1>IELTS Study Note</h1>
+          <div className="button-group">
+            <button 
+              className={`toggle-btn ${!isPrintMode ? 'active' : ''}`} 
+              onClick={() => setIsPrintMode(false)}
+            >
+              웹에서 보기
+            </button>
+            <button 
+              className={`toggle-btn ${isPrintMode ? 'active' : ''}`} 
+              onClick={() => setIsPrintMode(true)}
+            >
+              A4 인쇄용
+            </button>
+            <button 
+              className="print-button" 
+              onClick={() => {
+                setIsPrintMode(true);
+                setTimeout(() => window.print(), 100);
+              }}
+            >
+              <Printer size={18} />
+              인쇄 / PDF
+            </button>
+          </div>
         </div>
+        
+        {!isPrintMode && (
+          <div className="filters">
+            <div className="search-bar">
+              <input 
+                type="text" 
+                placeholder="노트 검색..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <div className="tag-list">
+              <button 
+                className={`tag-btn ${selectedTag === null ? 'active' : ''}`}
+                onClick={() => setSelectedTag(null)}
+              >
+                #전체
+              </button>
+              {allTags.map(tag => (
+                <button 
+                  key={tag}
+                  className={`tag-btn ${selectedTag === tag ? 'active' : ''}`}
+                  onClick={() => setSelectedTag(tag)}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {!isPrintMode ? (
         <div className="web-container">
-          <div className="markdown-content">
-            <ReactMarkdown 
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeRaw]}
-            >
-              {preprocessMarkdown(dummyText)}
-            </ReactMarkdown>
-          </div>
+          {filteredNotes.map(note => (
+            <div key={note.id} className="markdown-content note-block">
+              <ReactMarkdown 
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeRaw]}
+              >
+                {preprocessMarkdown(note.rawText)}
+              </ReactMarkdown>
+            </div>
+          ))}
+          {filteredNotes.length === 0 && (
+            <div className="no-results">검색 결과가 없습니다.</div>
+          )}
         </div>
       ) : (
         <div className="pages-container">
           {pages.map((pageTokens, index) => {
-            // Reconstruct markdown from tokens for this page
             const pageMarkdown = pageTokens.map(t => t.raw).join('');
             return (
               <div className="page" key={index}>

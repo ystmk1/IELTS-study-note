@@ -39,8 +39,7 @@ body {
 
 .controls {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
   width: 100%;
   max-width: 800px;
   background: white;
@@ -48,6 +47,60 @@ body {
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   margin-bottom: 20px;
+}
+
+.controls-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.search-bar input {
+  width: 100%;
+  padding: 10px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.search-bar input:focus {
+  border-color: var(--accent);
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-btn {
+  background: #f0f0f0;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tag-btn.active, .tag-btn:hover {
+  background: var(--accent);
+  color: white;
 }
 
 .controls h1 {
@@ -147,6 +200,12 @@ body {
   color: var(--text-primary);
 }
 
+.markdown-content hr, .page hr {
+  margin: 48px 0;
+  border: none;
+  border-top: 2px dashed var(--border-color);
+}
+
 .markdown-content h2, .page h2 {
   font-size: 24px;
   font-weight: 700;
@@ -160,23 +219,23 @@ body {
 .markdown-content h3, .page h3 {
   font-size: 20px;
   font-weight: 700;
-  margin-top: 24px;
-  margin-bottom: 12px;
+  margin-top: 32px;
+  margin-bottom: 16px;
   color: var(--accent);
 }
 
 .markdown-content h4, .page h4 {
   font-size: 18px;
   font-weight: 600;
-  margin-top: 20px;
-  margin-bottom: 10px;
+  margin-top: 24px;
+  margin-bottom: 12px;
 }
 
 .markdown-content h5, .page h5 {
   font-size: 15px;
   font-weight: 600;
-  margin-top: 16px;
-  margin-bottom: 8px;
+  margin-top: 32px;
+  margin-bottom: 12px;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -403,11 +462,21 @@ body {
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
   .controls {
+    padding: 16px;
+  }
+  .controls-header {
     flex-direction: column;
     gap: 16px;
-    padding: 16px;
+    align-items: stretch;
+  }
+  .button-group {
+    flex-wrap: wrap;
+    justify-content: center;
   }
   .web-container {
     padding: 20px;
+  }
+  .markdown-content hr, .page hr {
+    margin: 32px 0;
   }
 }
