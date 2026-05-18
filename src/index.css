@@ -604,19 +604,29 @@ body {
 }
 
 /* Print Styles */
+@page {
+  size: A4;
+  margin: 0;
+}
+
 @media print {
-  body {
+  html, body {
     background-color: white;
+    margin: 0;
+    padding: 0;
   }
   .app-container {
     padding: 0;
     gap: 0;
+    min-height: 0;
   }
   .controls {
     display: none !important;
   }
+  /* Use block layout in print; flex on the parent can break the browser's
+     page-break handling and leave phantom blank pages between sheets. */
   .pages-container {
-    display: flex !important;
+    display: block !important;
     gap: 0;
   }
   .web-container {
@@ -625,17 +635,25 @@ body {
   .page {
     box-shadow: none;
     border-radius: 0;
-    width: 794px;
-    height: 1123px;
+    /* Use mm so the box matches the physical sheet exactly. Mixing px
+       with a 0-margin @page used to push 1–2mm of overflow onto a new
+       sheet, producing a blank page after every question. */
+    width: 210mm;
+    height: 297mm;
+    margin: 0;
     page-break-after: always;
+    break-after: page;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    overflow: hidden;
   }
   .explanation-popup { display: none !important; }
   .floating-toc { display: none !important; }
   .markdown-content mark.highlight-clickable,
   .page mark.highlight-clickable { border-bottom: none; }
-  /* Remove last page break */
   .page:last-child {
     page-break-after: auto;
+    break-after: auto;
   }
 }
 
