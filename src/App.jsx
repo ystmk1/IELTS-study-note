@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -142,11 +142,13 @@ function App() {
   const allTags = [...new Set(allNotes.flatMap(note => note.tags))];
   
   // Filter notes
-  const filteredNotes = allNotes.filter(note => {
-    const matchesTag = selectedTag ? note.tags.includes(selectedTag) : true;
-    const matchesSearch = searchQuery ? note.rawText.toLowerCase().includes(searchQuery.toLowerCase()) : true;
-    return matchesTag && matchesSearch;
-  });
+  const filteredNotes = useMemo(() => {
+    return allNotes.filter(note => {
+      const matchesTag = selectedTag ? note.tags.includes(selectedTag) : true;
+      const matchesSearch = searchQuery ? note.rawText.toLowerCase().includes(searchQuery.toLowerCase()) : true;
+      return matchesTag && matchesSearch;
+    });
+  }, [selectedTag, searchQuery]);
 
   // Calculate layout for print mode (we concatenate all filtered notes for print, or print them one by one)
   useEffect(() => {
