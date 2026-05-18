@@ -47,6 +47,12 @@ function extractQuestions(body) {
   return result;
 }
 
+// Markdown hashtags can't contain spaces, so use `_` in the tag and we
+// render it as a space in the UI. e.g. `#집과_건물` → "집과 건물".
+function formatTagLabel(tag) {
+  return String(tag).replace(/^#/, '').replace(/_/g, ' ');
+}
+
 // Load all markdown files from the notes directory
 const noteModules = import.meta.glob('./notes/*.md', { query: '?raw', eager: true });
 const allNotes = Object.entries(noteModules).map(([path, content]) => {
@@ -59,7 +65,7 @@ const allNotes = Object.entries(noteModules).map(([path, content]) => {
   const tagOnlyList = tagLine
     ? tagLine.split(/\s+/).filter(Boolean)
     : tags;
-  const title = (tagOnlyList[2] || filename).replace(/^#/, '');
+  const title = formatTagLabel(tagOnlyList[2] || filename);
   const questions = extractQuestions(body);
 
   return {
@@ -521,12 +527,12 @@ function App() {
                 #전체
               </button>
               {allTags.map(tag => (
-                <button 
+                <button
                   key={tag}
                   className={`tag-btn ${selectedTag === tag ? 'active' : ''}`}
                   onClick={() => setSelectedTag(tag)}
                 >
-                  {tag}
+                  #{formatTagLabel(tag)}
                 </button>
               ))}
             </div>
@@ -541,7 +547,7 @@ function App() {
               {currentNote.tagList.length > 0 && (
                 <div className="note-tags">
                   {currentNote.tagList.map((t) => (
-                    <span key={t} className="note-tag">{t}</span>
+                    <span key={t} className="note-tag">#{formatTagLabel(t)}</span>
                   ))}
                 </div>
               )}
